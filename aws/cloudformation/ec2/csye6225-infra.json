@@ -1,0 +1,246 @@
+{
+    "Description": "AWS CloudFormation Template for Creating a Stack with 1-VPC, 3-Subnets, 1-IGW, 1-RT",
+
+    "AWSTemplateFormatVersion": "2010-09-09",
+
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {"Ref": "VPCCIDR"},
+                "EnableDnsSupport": "true",
+                "EnableDnsHostnames": "true",
+                "InstanceTenancy": "default",
+                "Tags":[
+                    {
+                        "Key" : "Name", 
+                        "Value": { "Ref": "VPCNAME" }
+                    }
+                ]
+            }
+        },
+
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {"Ref": "VPC"},
+                "CidrBlock": {"Ref": "SubnetCIDR1"},
+                "AvailabilityZone": "us-east-1a",
+                "MapPublicIpOnLaunch": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "PublicSubnet1"
+                    }
+                ]
+            }
+        },
+
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {"Ref": "VPC"},
+                "CidrBlock": {"Ref": "SubnetCIDR2"},
+                "AvailabilityZone": "us-east-1b",
+                "MapPublicIpOnLaunch": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "PublicSubnet2"
+                    }
+                ]
+            }
+        },
+
+        "PublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {"Ref": "VPC"},
+                "CidrBlock": {"Ref": "SubnetCIDR3"},
+                "AvailabilityZone": "us-east-1c",
+                "MapPublicIpOnLaunch": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "PublicSubnet3"
+                    }
+                ]
+            }
+        },
+
+        "Subnet1RouteTableAttachment": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+
+        "Subnet2RouteTableAttachment": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+
+        "Subnet3RouteTableAttachment": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties":{
+			    "Tags": [
+                    {
+                        "Key" : "Name", 
+                        "Value": { "Ref": "IGWNAME" }
+                    }
+                ]
+			}
+        },
+
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+		        "Tags": [
+                    {
+                        "Key" : "Name", 
+                        "Value": { "Ref": "RTNAME" }
+                    }
+                ]
+            }
+        },
+
+        "PublicInternetRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+         "SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+               "GroupDescription": "Create security group for csye6225 webservice",
+               "VpcId": {"Ref": "VPC"},
+               "SecurityGroupIngress": [
+                    { "IpProtocol": "tcp", "FromPort" : 22, "ToPort" : 22, "CidrIp" : "0.0.0.0/0" },
+                    { "IpProtocol": "tcp", "FromPort" : 80, "ToPort" : 80, "CidrIp" : "0.0.0.0/0" },
+                    { "IpProtocol": "tcp", "FromPort" : 443, "ToPort" : 443, "CidrIp" : "0.0.0.0/0" },
+                    { "IpProtocol": "tcp", "FromPort" : 6225, "ToPort" : 6225, "CidrIp" : "0.0.0.0/0" }
+                ],
+                "Tags":[{"Key": "Name", "Value": "csye6225 webservice security group"}]
+            }
+        },
+        "EC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {"Ref": "AMIID"},
+                "SubnetId": {"Ref": "PublicSubnet1"},
+                "InstanceType": "t2.micro",
+                "SecurityGroupIds": [{"Ref": "SecurityGroup"}],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": "20",
+                            "VolumeType": "gp2",
+                            "DeleteOnTermination": "true"
+                        }
+                    }
+                ],
+                "Tags":[{"Key" : "Name", "Value": "WebserviceEC2Inst"}]
+            }
+        }
+    },
+
+    "Parameters": {
+        "VPCNAME": {
+            "Description" : "VPC NAME",
+            "Type": "String",
+            "Default": "vpc-test"
+        },
+
+        "IGWNAME": {
+            "Description" : "Internet Gateway Name",
+            "Type": "String",
+            "Default": "igw-test"
+        },
+
+        "RTNAME": {
+            "Description" : "Public Route Table Name",
+            "Type": "String",
+            "Default": "rt-test"
+        },
+
+        "VPCCIDR": {
+            "Description": "VPC CIDR",
+            "Type": "String",
+            "Default": "199.0.0.0/16"
+        },
+
+        "SubnetCIDR1": {
+            "Type": "String",
+            "Description": "Subnet CIDR",
+            "Default": "199.0.0.0/24"
+        },
+
+        "SubnetCIDR2": {
+            "Type": "String",
+            "Description": "Subnet CIDR",
+            "Default": "199.0.1.0/24"
+        },
+
+        "SubnetCIDR3": {
+            "Type": "String",
+            "Description": "Subnet CIDR",
+            "MinLength": "9",
+            "MaxLength": "18",
+            "Default": "199.0.2.0/24"
+        },
+
+        "AMIID": {
+            "Description" : "AMI ID",
+            "Type": "String"
+        }
+
+      }
+}
+
