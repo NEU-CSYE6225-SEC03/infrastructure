@@ -147,18 +147,26 @@ then
     exit
 fi
 
-echo "Enter S3 bucket name (default: dev.weifenglai.me):"
+echo "Enter S3 bucket name (default: prod.weifenglai.me):"
 read s3BucketName
 if [ -z "$s3BucketName" ]
 then
-    s3BucketName="dev.weifenglai.me"
+    s3BucketName="prod.weifenglai.me"
 fi
 
-echo "Enter domain name (default: dev.weifenglai.me.):"
+echo "Enter domain name (default: prod.weifenglai.me.):"
 read domainName
 if [ -z "$domainName" ]
 then
-   domainName="dev.weifenglai.me."
+   domainName="prod.weifenglai.me."
+fi
+
+# parameters
+echo "Enter CICD S3 bucket name (default: codedeploy.prod.weifenglai.me):"
+read cicdS3BucketName
+if [ -z "$cicdS3BucketName" ]
+then
+    cicdS3BucketName="codedeploy.prod.weifenglai.me"
 fi
 
 status=$(aws cloudformation create-stack --stack-name $stackName --profile $account \
@@ -179,6 +187,7 @@ ParameterKey=SubnetCIDR8,ParameterValue=$subnetCidr8 \
 ParameterKey=AMIID,ParameterValue=$amiId \
 ParameterKey=S3BucketName,ParameterValue=$s3BucketName \
 ParameterKey=DomainName,ParameterValue=$domainName \
+ParameterKey=CICDS3BucketName,ParameterValue=$cicdS3BucketName \
 )
 # --on-failure DELETE)
 
@@ -198,4 +207,3 @@ else
     echo "Failed: failed to deploy the stack"
     echo $status
 fi
-
