@@ -602,6 +602,97 @@
             }
         },
 
+        "WebserviceCodeDeployServiceRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "RoleName" : "WebserviceCodeDeployServiceRole",
+                "Description" : "Role for EC2 instances that will be used to host web application",
+                "AssumeRolePolicyDocument": {
+                    "Version" : "2012-10-17",
+                    "Statement": [ {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": [ 
+                                { "Fn::Sub": "codedeploy.${AWS::Region}.amazonaws.com" }
+                            ]
+                        },
+                        "Action": [ "sts:AssumeRole" ]
+                    } ]
+                },
+                "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"]
+            }
+        },
+
+        "CodeDeployS3Policy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+               "PolicyName": "CodeDeploy-S3-Policy",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                     "Effect": "Allow",
+                     "Action": [
+                        "s3:Get*",
+                        "s3:List*",
+                        "s3:PutObject"
+                     ],
+                     "Resource": [
+                        {
+                            "Fn::Sub": [ 
+                                "${prefix}${CICDS3BucketName}", 
+                                {
+                                    "prefix": "arn:aws:s3:::",
+                                    "S3BucketName": {"Ref" : "CICDS3BucketName" }
+                                }
+                            ]
+                        },
+
+                        {
+                            "Fn::Sub": [ 
+                                "${prefix}${CICDS3BucketName}/*", 
+                                {
+                                    "prefix": "arn:aws:s3:::",
+                                    "S3BucketName": {"Ref" : "CICDS3BucketName" }
+                                }
+                            ]
+                        }
+                     ]
+                  } ]
+               },
+               "Roles": [ {"Ref": "WebserviceCodeDeployServiceRole"} ]
+            }
+        },
+
+        "CodeDeployApplication": {
+            "Type": "AWS::CodeDeploy::Application",
+            "Properties":{
+              "ApplicationName":  "webservice"
+            }
+        },
+
+        "CodeDeployDeploymentGroup": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Properties": {
+              "DeploymentGroupName": "webservice-deployment",
+              "ApplicationName": {"Ref": "CodeDeployApplication"},
+              "AutoScalingGroups" : [ {"Ref" : "AutoScalingGroupId" } ],
+              "ServiceRoleArn": { "Fn::GetAtt" : ["WebserviceCodeDeployServiceRole", "Arn"] },
+              "DeploymentStyle" : {
+                  "DeploymentOption" : "WITHOUT_TRAFFIC_CONTROL",
+                  "DeploymentType" : "IN_PLACE"
+              },
+              "DeploymentConfigName" : "CodeDeployDefault.AllAtOnce",
+              "AutoRollbackConfiguration" : { "Enabled" : true, "Events" : [ "DEPLOYMENT_FAILURE" ]},
+              "Ec2TagFilters": [
+                  {
+                      "Key": "Name",
+                      "Value": {"Fn::Sub":"${AWS::StackName}-asg"},
+                      "Type": "KEY_AND_VALUE"
+                  }
+              ]
+            }
+        },
+
         "LoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
@@ -1067,8 +1158,13 @@
             "Description" : "Domain Name",
             "Type": "String",
             "Default": "dev.weifenglai.me."
-        }
+        },
 
+        "CICDS3BucketName": {
+            "Description" : "CICD S3BucketName",
+            "Default": "codedeploy.prod.weifenglai.me",
+            "Type": "String"
+        }
       }
 }
 
