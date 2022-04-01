@@ -541,7 +541,9 @@
                   } ]
                },
                "RoleName": "EC2-CSYE6225",
-               "Path": "/"
+               "Path": "/",
+
+                "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"]
             }
         },
 
@@ -619,6 +621,7 @@
                         "Action": [ "sts:AssumeRole" ]
                     } ]
                 },
+
                 "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"]
             }
         },
@@ -655,11 +658,16 @@
                                     "S3BucketName": {"Ref" : "CICDS3BucketName" }
                                 }
                             ]
-                        }
+                        },
+
+                        { "Fn::Sub": "arn:aws:s3:::aws-codedeploy-${AWS::Region}/*" }
                      ]
                   } ]
                },
-               "Roles": [ {"Ref": "WebserviceCodeDeployServiceRole"} ]
+               "Roles": [ 
+                   {"Ref": "WebserviceCodeDeployServiceRole"},
+                   {"Ref": "S3Role"}
+               ]
             }
         },
 
