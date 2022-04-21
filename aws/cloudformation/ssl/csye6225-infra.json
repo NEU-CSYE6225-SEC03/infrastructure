@@ -254,8 +254,7 @@
                "VpcId": {"Ref": "VPC"},
                "SecurityGroupIngress": [
                     { 
-                        "IpProtocol": "tcp", "FromPort" : 22, "ToPort" : 22, 
-                        "SourceSecurityGroupId": {"Ref": "LoadBalancerSecurityGroup"}
+                        "IpProtocol": "tcp", "FromPort" : 22, "ToPort" : 22, "CidrIp" : "0.0.0.0/0"
                     },
                     { 
                         "IpProtocol": "tcp", "FromPort" : 6225, "ToPort" : 6225,
@@ -491,7 +490,9 @@
                 ],
                 "DBParameterGroupName": {
                     "Ref": "DBParameterGroup"
-                }
+                },
+                "StorageEncrypted": "true",
+                "KmsKeyId": {"Ref": "RDSKmsKey"}
             }
         },
 
@@ -839,98 +840,108 @@
             }
         },
 
-        "LaunchConfigurationId": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
+        "MyLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchConfigurationName": "asg_launch_config",
-                "PlacementTenancy": "default",
-                "InstanceType": "t2.micro",
-                "AssociatePublicIpAddress": "true",
-                "IamInstanceProfile": {"Ref": "S3RoleInstanceProfile"},
-                "ImageId": {"Ref": "AMIID"},
-                "SecurityGroups": [ {"Ref": "SecurityGroup"} ],
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "VolumeType": "gp2",
-                            "VolumeSize": "20",
-                            "DeleteOnTermination": "true"
+                "LaunchTemplateName": "MyLaunchTemplate",
+                "LaunchTemplateData": {
+                    "IamInstanceProfile": {
+                        "Arn": {"Fn::GetAtt": ["S3RoleInstanceProfile", "Arn"]}
+                    },
+                    "ImageId": {"Ref": "AMIID"},
+                    "SecurityGroupIds": [
+                        {
+                            "Fn::GetAtt": [
+                            "SecurityGroup",
+                            "GroupId"
+                            ]
+                        }
+                    ],
+                    "InstanceType": "t2.micro",
+                    "KeyName":"MyKeyPair",
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeType": "gp2",
+                                "VolumeSize": "20",
+                                "DeleteOnTermination": "true",
+                                "Encrypted": true,
+                                "KmsKeyId" : {"Ref": "EBSKmsKey"}
+                            }
+                        }
+                    ],
+                    "UserData": { 
+                        "Fn::Base64": { 
+                            "Fn::Join": [
+                                "", 
+                                [
+                                    "#!/bin/bash -xe \n",
+                                    "cd /home/ec2-user \n",
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "sudo sed -i '$a MYSQL_IP: ",
+                                                {
+                                                    "Fn::GetAtt": [
+                                                        "DBInstance",
+                                                        "Endpoint.Address"
+                                                    ]
+                                                },
+                                                "'  webservice/config/config.yaml \n"
+                                            ]
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "sudo sed -i '1i mysql -h ",
+                                                {
+                                                    "Fn::GetAtt": [
+                                                        "DBInstance",
+                                                        "Endpoint.Address"
+                                                    ]
+                                                },
+                                                " -ucsye6225 -pcsye6225Lwf<<EOF' sql.sh \n",
+                                                "sudo /usr/bin/sh sql.sh \n"
+                                            ]
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "sudo sed -i '$a S3BUCKETNAME: ",
+                                                {
+                                                    "Ref": "S3Bucket"
+                                                },
+                                                "'  webservice/config/config.yaml \n"
+                                            ]
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "sudo sed -i '$a SNSTopic: ",
+                                                {
+                                                    "Ref": "SNSTopic"
+                                                },
+                                                "'  webservice/config/config.yaml \n"
+                                            ]
+                                        ]
+                                    },
+                                    "sudo cp webservice.service /etc/systemd/system/ \n",
+                                    "sudo systemctl daemon-reload \n",
+                                    "sudo systemctl enable webservice.service \n",
+                                    "sudo systemctl start webservice.service \n"
+                                ]
+                            ]
                         }
                     }
-                ],
-                "EbsOptimized": false,
-                "UserData": { 
-                    "Fn::Base64": { 
-                        "Fn::Join": [
-                            "", 
-                            [
-                                "#!/bin/bash -xe \n",
-                                "cd /home/ec2-user \n",
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            "sudo sed -i '$a MYSQL_IP: ",
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "DBInstance",
-                                                    "Endpoint.Address"
-                                                ]
-                                            },
-                                            "'  webservice/config/config.yaml \n"
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            "sudo sed -i '1i mysql -h ",
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "DBInstance",
-                                                    "Endpoint.Address"
-                                                ]
-                                            },
-                                            " -ucsye6225 -pcsye6225Lwf<<EOF' sql.sh \n",
-                                            "sudo /usr/bin/sh sql.sh \n"
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            "sudo sed -i '$a S3BUCKETNAME: ",
-                                            {
-                                                "Ref": "S3Bucket"
-                                            },
-                                            "'  webservice/config/config.yaml \n"
-                                        ]
-                                    ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            "sudo sed -i '$a SNSTopic: ",
-                                            {
-                                                "Ref": "SNSTopic"
-                                            },
-                                            "'  webservice/config/config.yaml \n"
-                                        ]
-                                    ]
-                                },
-                                "sudo cp webservice.service /etc/systemd/system/ \n",
-                                "sudo systemctl daemon-reload \n",
-                                "sudo systemctl enable webservice.service \n",
-                                "sudo systemctl start webservice.service \n"
-                            ]
-                        ]
-                    }
                 }
-
             }
         },
 
@@ -941,7 +952,10 @@
                 "Cooldown": "60",
                 "DesiredCapacity": "3",
                 "HealthCheckType": "EC2",
-                "LaunchConfigurationName": {"Ref": "LaunchConfigurationId"},
+                "LaunchTemplate": {
+                    "LaunchTemplateId": { "Ref": "MyLaunchTemplate" },
+                    "Version": { "Fn::GetAtt": [ "MyLaunchTemplate", "LatestVersionNumber" ] }
+                },
                 "MinSize": "1",
                 "MaxSize": "5",
                 "MetricsCollection": [ 
@@ -1168,6 +1182,64 @@
                     "Fn::GetAtt": [
                         "LambdaFunction",
                         "Arn"
+                    ]
+                }
+            }
+        },
+
+        "EBSKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties" : {
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Enable Service Role",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling" }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+
+        "RDSKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties" : {
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Enable Service Role",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
                     ]
                 }
             }
